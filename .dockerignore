@@ -1,0 +1,9 @@
+videos/
+output/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.git
+*.mp4
+*.pt

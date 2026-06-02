@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time store analytics dashboard powered by CCTV computer vision pipeline">
+  <title>Store Intelligence | Purplle</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Base ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+
+    /* ── Pulsing LIVE dot ── */
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+    .live-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse-live 2s ease-in-out infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Stat cards ── */
+    .stat-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Section panels ── */
+    .panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Charts ── */
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+
+    /* ── Heatmap grid ── */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 900px) {
+      .heatmap-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .heatmap-card {
+      padding: 1.5rem;
+      border-radius: 12px;
+      color: #fff;
+      transition: transform 0.2s;
+    }
+    .heatmap-card:hover { transform: scale(1.03); }
+    .heatmap-zone-name {
+      font-weight: 700;
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .heatmap-stat {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    /* ── Events table ── */
+    .events-table-wrapper {
+      max-height: 320px;
+      overflow-y: auto;
+      border-radius: 8px;
+    }
+    .events-table-wrapper::-webkit-scrollbar {
+      width: 6px;
+    }
+    .events-table-wrapper::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    .events-table-wrapper::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 3px;
+    }
+    .events-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .events-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .events-table th {
+      background: #334155;
+      color: #e2e8f0;
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    .events-table td {
+      padding: 0.5rem 0.75rem;
+      color: #e2e8f0;
+      border-bottom: 1px solid #334155;
+    }
+    .events-table tr:nth-child(odd) td { background: #1e293b; }
+    .events-table tr:nth-child(even) td { background: #263348; }
+    .events-table tr:hover td { background: #334155; }
+
+    /* ── Event type badges ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+    .badge-blue   { background: rgba(59,130,246,0.2); color: #60a5fa; }
+    .badge-green  { background: rgba(16,185,129,0.2); color: #34d399; }
+    .badge-yellow { background: rgba(245,158,11,0.2); color: #fbbf24; }
+    .badge-purple { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .badge-red    { background: rgba(239,68,68,0.2);  color: #f87171; }
+    .badge-gray   { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+    /* ── Toast notification ── */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #7f1d1d;
+      border: 1px solid #991b1b;
+      color: #fca5a5;
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Camera selector ── */
+    .cam-select {
+      background: #334155;
+      color: #f1f5f9;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .cam-select:focus { border-color: #3b82f6; }
+
+    /* ── Layout grid ── */
+    .dashboard-grid {
+      display: grid;
+      gap: 1rem;
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      color: #64748b;
+      padding: 2rem;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ HEADER ═══ -->
+  <header style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <h1 style="font-size:1.75rem; font-weight:800; letter-spacing:-0.02em;">
+        🏪 Store Intelligence Dashboard
+      </h1>
+      <p style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">
+        Last updated: <span id="last-updated">--:--:--</span>
+        &nbsp;•&nbsp;
+        <span class="live-dot"></span><span style="color:#22c55e; font-weight:600;">LIVE</span>
+      </p>
+    </div>
+    <div>
+      <label style="font-size:0.8rem; color:#94a3b8; margin-right:6px;">CAM:</label>
+      <select id="camera-select" class="cam-select">
+        <option value="">ALL</option>
+        <option value="CAM_1">CAM_1</option>
+        <option value="CAM_2">CAM_2</option>
+        <option value="CAM_3">CAM_3</option>
+        <option value="CAM_4">CAM_4</option>
+        <option value="CAM_5">CAM_5</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="dashboard-grid" style="margin-top:1rem;">
+
+    <!-- ═══ STAT CARDS ═══ -->
+    <div class="stats-row">
+      <div class="stat-card" id="card-people">
+        <div class="stat-value" id="val-people">0</div>
+        <div class="stat-label">Total People</div>
+      </div>
+      <div class="stat-card" id="card-events">
+        <div class="stat-value" id="val-events">0</div>
+        <div class="stat-label">Total Events</div>
+      </div>
+      <div class="stat-card" id="card-peak">
+        <div class="stat-value" id="val-peak">0</div>
+        <div class="stat-label">Peak Concurrent</div>
+      </div>
+      <div class="stat-card" id="card-anomalies">
+        <div class="stat-value" id="val-anomalies">0</div>
+        <div class="stat-label">Anomalies</div>
+      </div>
+    </div>
+
+    <!-- ═══ CHARTS ROW ═══ -->
+    <div class="charts-row">
+      <div class="panel">
+        <div class="panel-title">Zone Footfall</div>
+        <div class="chart-container">
+          <canvas id="footfall-chart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Avg Dwell Time (seconds)</div>
+        <div class="chart-container">
+          <canvas id="dwell-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ HEATMAP ═══ -->
+    <div class="panel">
+      <div class="panel-title">Zone Intensity Heatmap</div>
+      <div class="heatmap-grid" id="heatmap-container">
+        <div class="empty-state">Loading heatmap…</div>
+      </div>
+    </div>
+
+    <!-- ═══ EVENTS TABLE ═══ -->
+    <div class="panel">
+      <div class="panel-title">Recent Events</div>
+      <div class="events-table-wrapper">
+        <table class="events-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Camera</th>
+              <th>Track ID</th>
+              <th>Zone</th>
+              <th>Dwell (s)</th>
+            </tr>
+          </thead>
+          <tbody id="events-body">
+            <tr><td colspan="6" class="empty-state">Loading events…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ TOAST ═══ -->
+  <div class="toast" id="toast">⚠ Could not reach API. Is the server running?</div>
+
+  <script>
+    // ════════════════════════════════════════════════════════════
+    // CONFIG
+    // ════════════════════════════════════════════════════════════
+    const API_BASE = "http://localhost:8000";
+
+    // ════════════════════════════════════════════════════════════
+    // STATE
+    // ════════════════════════════════════════════════════════════
+    let footfallChart = null;
+    let dwellChart = null;
+    let pollTimer = null;
+
+    // ════════════════════════════════════════════════════════════
+    // DOM REFS
+    // ════════════════════════════════════════════════════════════
+    const cameraSelect    = document.getElementById("camera-select");
+    const lastUpdatedEl   = document.getElementById("last-updated");
+    const valPeople       = document.getElementById("val-people");
+    const valEvents       = document.getElementById("val-events");
+    const valPeak         = document.getElementById("val-peak");
+    const valAnomalies    = document.getElementById("val-anomalies");
+    const heatmapContainer = document.getElementById("heatmap-container");
+    const eventsBody      = document.getElementById("events-body");
+    const toastEl         = document.getElementById("toast");
+
+    // ════════════════════════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════════════════════════
+    function getSelectedCamera() {
+      return cameraSelect.value || null;
+    }
+
+    function camParam(cam) {
+      return cam ? `camera_id=${encodeURIComponent(cam)}` : "";
+    }
+
+    function updateTimestamp() {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      lastUpdatedEl.textContent = `${hh}:${mm}:${ss}`;
+    }
+
+    // ── Toast ──
+    let toastTimeout = null;
+    function showToast(msg) {
+      toastEl.textContent = msg || "⚠ Could not reach API. Is the server running?";
+      toastEl.classList.add("show");
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toastEl.classList.remove("show"), 4000);
+    }
+
+    // ── Animated counter ──
+    function animateCounter(el, target) {
+      const tgt = Math.round(target);
+      let current = 0;
+      const step = Math.max(1, Math.ceil(tgt / 40));
+      const interval = setInterval(() => {
+        current += step;
+        if (current >= tgt) {
+          current = tgt;
+          clearInterval(interval);
+        }
+        el.textContent = current.toLocaleString();
+      }, 30);
+    }
+
+    // ── Color interpolation for heatmap ──
+    function intensityToColor(intensity) {
+      const r = Math.round(30 + (249 - 30) * intensity);
+      const g = Math.round(58 + (115 - 58) * intensity);
+      const b = Math.round(95 + (22 - 95) * intensity);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    // ── Event type → badge class ──
+    function badgeClass(type) {
+      switch (type) {
+        case "person_detected": return "badge-blue";
+        case "person_entered":  return "badge-green";
+        case "person_exited":   return "badge-yellow";
+        case "person_moved":    return "badge-purple";
+        case "person_lost":     return "badge-red";
+        case "dwell_update":    return "badge-gray";
+        default:                return "badge-gray";
+      }
+    }
+
+    // ── Format timestamp_sec to MM:SS ──
+    function formatTime(ts) {
+      const totalSec = Math.round(ts);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    // ── Safe fetch wrapper ──
+    async function apiFetch(path) {
+      const resp = await fetch(`${API_BASE}${path}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // CHART DEFAULTS
+    // ════════════════════════════════════════════════════════════
+    const chartDefaults = {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#e2e8f0" },
+          grid: { color: "#334155" },
+        },
+        y: {
+          ticks: { color: "#e2e8f0" },
+          grid: { color: "#334155" },
+        },
+      },
+    };
+
+    // ════════════════════════════════════════════════════════════
+    // DATA FETCHERS
+    // ════════════════════════════════════════════════════════════
+
+    // ── 1. Summary → stat cards ──
+    async function fetchSummary(animate) {
+      try {
+        const cam = getSelectedCamera();
+        const url = cam ? `/api/summary?${camParam(cam)}` : "/api/summary";
+        const data = await apiFetch(url);
+        const cameras = data.cameras || [];
+
+        let totalPeople = 0, totalEvents = 0, peakConcurrent = 0, anomalies = 0;
+        for (const c of cameras) {
+          totalPeople   += c.total_unique_people   || 0;
+          totalEvents   += c.total_events          || 0;
+          peakConcurrent = Math.max(peakConcurrent, c.peak_concurrent_people || 0);
+          anomalies     += c.anomaly_count         || 0;
+        }
+
+        if (animate) {
+          animateCounter(valPeople,   totalPeople);
+          animateCounter(valEvents,   totalEvents);
+          animateCounter(valPeak,     peakConcurrent);
+          animateCounter(valAnomalies, anomalies);
+        } else {
+          valPeople.textContent   = totalPeople.toLocaleString();
+          valEvents.textContent   = totalEvents.toLocaleString();
+          valPeak.textContent     = peakConcurrent.toLocaleString();
+          valAnomalies.textContent = anomalies.toLocaleString();
+        }
+      } catch (e) {
+        showToast();
+      }
+    }
+
+    // ── 2. Footfall → bar chart ──
+    async function fetchFootfall() {
+      try {
+        const cam = getSelectedCamera();
+        const url = cam ? `/api/footfall?${camParam(cam)}` : "/api/footfall";
+        const data = await apiFetch(url);
+        const footfall = data.footfall || {};
+
+        const zones = Object.keys(footfall);
+        const values = zones.map(z => footfall[z]);
+
+        if (footfallChart) { footfallChart.destroy(); footfallChart = null; }
+
+        const ctx = document.getElementById("footfall-chart").getContext("2d");
+        footfallChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: zones,
+            datasets: [{
+              data: values,
+              backgroundColor: "#3b82f6",
+              borderRadius: 6,
+              barPercentage: 0.7,
+            }],
+          },
+          options: { ...chartDefaults },
+        });
+      } catch (e) {
+        showToast();
+      }
+    }
+
+    // ── 3. Dwell time → bar chart ──
+    async function fetchDwell() {
+      try {
+        const cam = getSelectedCamera();
+        const url = cam ? `/api/dwell-time?${camParam(cam)}` : "/api/dwell-time";
+        const data = await apiFetch(url);
+        const dwellTime = data.dwell_time || {};
+        const highest = data.highest_dwell_zone;
+
+        const zones = Object.keys(dwellTime);
+        const values = zones.map(z => dwellTime[z]);
+        const colors = zones.map(z => z === highest ? "#f59e0b" : "#10b981");
+
+        if (dwellChart) { dwellChart.destroy(); dwellChart = null; }
+
+        const ctx = document.getElementById("dwell-chart").getContext("2d");
+        dwellChart = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: zones,
+            datasets: [{
+              data: values,
+              backgroundColor: colors,
+              borderRadius: 6,
+              barPercentage: 0.7,
+            }],
+          },
+          options: { ...chartDefaults },
+        });
+      } catch (e) {
+        showToast();
+      }
+    }
+
+    // ── 4. Heatmap → colored boxes ──
+    async function fetchHeatmap() {
+      try {
+        const cam = getSelectedCamera();
+        const url = cam ? `/api/heatmap?${camParam(cam)}` : "/api/heatmap";
+        const data = await apiFetch(url);
+        const zones = data.zones || [];
+
+        if (zones.length === 0) {
+          heatmapContainer.innerHTML = '<div class="empty-state">No heatmap data</div>';
+          return;
+        }
+
+        heatmapContainer.innerHTML = zones.map(z => `
+          <div class="heatmap-card" style="background:${intensityToColor(z.intensity)};">
+            <div class="heatmap-zone-name">${z.zone_name}</div>
+            <div class="heatmap-stat">Footfall: <strong>${z.footfall}</strong></div>
+            <div class="heatmap-stat">Avg Dwell: <strong>${z.avg_dwell_sec.toFixed(1)}s</strong></div>
+            <div class="heatmap-stat" style="opacity:0.7; margin-top:4px; font-size:0.75rem;">
+              Intensity: ${(z.intensity * 100).toFixed(0)}%
+            </div>
+          </div>
+        `).join("");
+      } catch (e) {
+        showToast();
+      }
+    }
+
+    // ── 5. Events → table ──
+    async function fetchEvents() {
+      try {
+        const cam = getSelectedCamera();
+        const params = new URLSearchParams({ limit: "20", offset: "0" });
+        if (cam) params.set("camera_id", cam);
+        const data = await apiFetch(`/api/events?${params.toString()}`);
+        const events = data.events || [];
+
+        if (events.length === 0) {
+          eventsBody.innerHTML = '<tr><td colspan="6" class="empty-state">No events found</td></tr>';
+          return;
+        }
+
+        eventsBody.innerHTML = events.map(ev => `
+          <tr>
+            <td>${formatTime(ev.timestamp_sec)}</td>
+            <td><span class="badge ${badgeClass(ev.event_type)}">${ev.event_type}</span></td>
+            <td>${ev.camera_id}</td>
+            <td>${ev.track_id}</td>
+            <td>${ev.zone || "—"}</td>
+            <td>${ev.dwell_sec != null ? ev.dwell_sec.toFixed(1) : "—"}</td>
+          </tr>
+        `).join("");
+      } catch (e) {
+        showToast();
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // ORCHESTRATION
+    // ════════════════════════════════════════════════════════════
+
+    async function loadAll(animate) {
+      updateTimestamp();
+      await Promise.all([
+        fetchSummary(animate),
+        fetchFootfall(),
+        fetchDwell(),
+        fetchHeatmap(),
+        fetchEvents(),
+      ]);
+    }
+
+    async function pollTick() {
+      updateTimestamp();
+      await Promise.all([
+        fetchSummary(false),
+        fetchEvents(),
+      ]);
+    }
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(pollTick, 5000);
+    }
+
+    // ── Camera change handler ──
+    cameraSelect.addEventListener("change", () => {
+      loadAll(false);
+    });
+
+    // ── Init ──
+    loadAll(true);
+    startPolling();
+  </script>
+</body>
+</html>

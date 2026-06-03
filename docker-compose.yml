@@ -28,12 +28,27 @@ services:
       timeout: 3s
       retries: 5
 
+  schema-init:
+    image: postgres:15
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: store_pass
+    volumes:
+      - ./db:/db
+    command: >
+      sh -c "psql -h postgres -U store_user -d store_intel -f /db/schema.sql &&
+             psql -h postgres -U store_user -d store_intel -f /db/schema_v2.sql"
+    restart: "no"
+
   api:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -47,6 +62,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      schema-init:
+        condition: service_completed_successfully
     volumes:
       - ./output:/app/output
 

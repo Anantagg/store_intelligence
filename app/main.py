@@ -39,6 +39,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Mount legacy v1 routes for the dashboard ──
+from api.routes import footfall, heatmap as legacy_heatmap, dwell, anomalies as legacy_anomalies, events, summary
+app.include_router(footfall.router, prefix="/api", tags=["footfall"])
+app.include_router(legacy_heatmap.router, prefix="/api", tags=["heatmap"])
+app.include_router(dwell.router, prefix="/api", tags=["dwell"])
+app.include_router(legacy_anomalies.router, prefix="/api", tags=["anomalies"])
+app.include_router(events.router, prefix="/api", tags=["events"])
+app.include_router(summary.router, prefix="/api", tags=["summary"])
+
 
 # ── Structured request logging middleware ──
 @app.middleware("http")
